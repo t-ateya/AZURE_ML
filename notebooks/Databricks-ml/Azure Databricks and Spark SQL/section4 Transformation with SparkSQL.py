@@ -483,6 +483,7 @@ countries.groupBy('region_id', 'sub_region_id').agg(avg('population'), sum('area
 
 # COMMAND ----------
 
+# Using withColumnRenamed
 countries.groupBy('region_id', 'sub_region_id'). \
 agg(sum('population'), sum('area_km2')). \
 withColumnRenamed('sum(population)', 'total_pop'). \
@@ -492,8 +493,263 @@ display()
 
 # COMMAND ----------
 
+# Using alias
 countries.groupBy('region_id', 'sub_region_id'). \
-agg(sum('population'), sum('area_km2')). \
-withColumnRenamed('sum(population)', 'total_pop'). \
-withColumnRenamed('sum(area_km2)', 'total_area'). \
+agg(sum('population').alias('total_pop'), sum('area_km2').alias('total_area')). \
 display()
+
+# COMMAND ----------
+
+"""
+      Assignment
+- Aggregate the datafrmae by region_id and sub_region_id
+
+   Display the minimum- and maximum population aliased as max_pop and min_pop
+
+   Sort the results by region_id in ascending order
+"""
+
+# COMMAND ----------
+
+# My Solution
+countries.groupBy("region_id", 'sub_region_id') \
+.agg(min('population').alias('min_pop'), max('population').alias('max_pop')) \
+.sort(asc('region_id')) \
+.show()
+
+# COMMAND ----------
+
+# The teacher's solution
+countries.groupBy("region_id", 'sub_region_id') \
+.agg(min('population').alias('min_pop'), max('population').alias('max_pop')) \
+.sort(countries['region_id'].asc()) \
+.display()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Pivotting  DataFrame
+# MAGIC
+
+# COMMAND ----------
+
+from pyspark.sql.types import IntegerType, DoubleType, StructField, StructType, StringType
+# FALSE => It should not be NUll, True=> It can be NULL
+# StructType defines the structure of the DataFrame
+# StructField defines the metadata of the columns within a DataFrame
+
+counties_schema = StructType(
+[
+ StructField('COUNTRY_ID', IntegerType(), False),
+ StructField('NAME', StringType(), False),
+ StructField('NATIONALITY', StringType(), False),
+ StructField('COUNTRY_CODE', StringType(), False),
+ StructField('ISO_ALPHA2', StringType(), False),
+ StructField('CAPITAL', StringType(), False),
+ StructField('POPULATION', DoubleType(), False),
+ StructField('AREA_KM2', IntegerType(), False),
+ StructField('REGION_ID', IntegerType(), False),
+ StructField('SUB_REGION_ID', IntegerType(), True),
+ StructField('INTERMEDIATE_REGION_ID', IntegerType(), True),
+ StructField('ORGANIZATION_REGION_ID', IntegerType(), True),
+ ]
+)
+
+countries = spark.read.csv(path=countries_path, header=True, schema=counties_schema)
+
+# COMMAND ----------
+
+countries.groupBy('region_id', 'sub_region_id').sum('population').display()
+
+# COMMAND ----------
+
+countries.groupBy('region_id', 'sub_region_id').pivot('region_id').sum('population').display()
+
+# COMMAND ----------
+
+countries.groupBy('sub_region_id').pivot('region_id').sum('population').display()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Joining DataFrames
+
+# COMMAND ----------
+
+region_path= "/FileStore/tables/country_regions.csv"
+
+regions = spark.read.csv(region_path, header="True")
+display(region_path)
+
+# COMMAND ----------
+
+from pyspark.sql.types import IntegerType, DoubleType, StructField, StructType, StringType
+# FALSE => It should not be NUll, True=> It can be NULL
+# StructType defines the structure of the DataFrame
+# StructField defines the metadata of the columns within a DataFrame
+
+regions_schema = StructType(
+[
+ StructField('ID', IntegerType(), False),
+ StructField('NAME', StringType(), False),
+ ]
+)
+
+regions = spark.read.csv(path=region_path, header=True, schema=regions_schema)
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC ## Inner Join
+# MAGIC Inner Join: Returns only matching records from both table
+# MAGIC
+
+# COMMAND ----------
+
+countries.display()
+
+# COMMAND ----------
+
+regions.display()
+
+# COMMAND ----------
+
+countries.join(regions, countries['region_id']==regions['Id'], 'inner').display()
+
+# COMMAND ----------
+
+# Assignment
+countries \
+.join(regions, regions['Id'] == countries['region_id'], 'inner') \
+.select(countries['name'].alias('country_name'), regions['name'].alias('region_name'), countries['population']) \
+.sort(countries['population'].desc()) \
+.display()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Left Join 
+# MAGIC Returns all records from the left table and only matching records from the right table
+
+# COMMAND ----------
+
+countries.join(regions, countries['region_id']==regions['Id'], 'left').display()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Right Join
+# MAGIC Returns all records from the right table and only matching records from the left table
+
+# COMMAND ----------
+
+countries.join(regions, countries['region_id']==regions['Id'], 'right').display()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC Returns all records from both tables
+# MAGIC with NaNs for missing values
+
+# COMMAND ----------
+
+countries.join(regions, countries['region_id']==regions['Id'], 'right') \
+.select(countries['name'], regions['name'], countries['population']) \
+.display()
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC # Union
+
+# COMMAND ----------
+
+from pyspark.sql.functions import count
+
+countries.count()
+
+# COMMAND ----------
+
+union = countries.union(countries)
+union.display()
+
+# COMMAND ----------
+
+union.count()
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Unpivotting DataFrame
+
+# COMMAND ----------
+
+countries \
+.join(regions, regions['Id'] == countries['region_id'], 'inner') \
+.select(countries['name'].alias('country_name'), regions['name'].alias('region_name'), countries['population']) \
+.sort(countries['population'].desc()) \
+.display()
+
+# COMMAND ----------
+
+countries = countries \
+.join(regions, regions['Id'] == countries['region_id'], 'inner') \
+.select(countries['name'].alias('country_name'), regions['name'].alias('region_name'), countries['population'])
+
+# COMMAND ----------
+
+countries.display()
+
+# COMMAND ----------
+
+pivot_countries = countries.groupBy('country_name').pivot('region_name').sum('population')
+
+# COMMAND ----------
+
+pivot_countries.display()
+
+# COMMAND ----------
+
+from pyspark.sql.functions import expr
+
+pivot_countries.select('country_name', expr("stack(5, 'Africa', Africa, 'America', America, 'Asia', Asia, 'Europe', Europe, 'Oceania', Oceania) as (region_name, population)")).filter('population is not null').display()
+
+# COMMAND ----------
+
+# MAGIC %md 
+# MAGIC # Pandas
+
+# COMMAND ----------
+
+import pandas as pd 
+
+countries.display()
+
+
+# COMMAND ----------
+
+countries_pd = countries.toPandas()
+
+# COMMAND ----------
+
+countries_pd
+
+# COMMAND ----------
+
+countries_pd.dtypes
+
+# COMMAND ----------
+
+countries_pd.head()
+
+# COMMAND ----------
+
+countries_pd.iloc[0]
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # Challenge Section: Customer Order
+
+# COMMAND ----------
+
